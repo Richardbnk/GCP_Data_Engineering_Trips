@@ -119,7 +119,7 @@ def clean_coordinates(coord):
 if __name__ == "__main__":
 
     # create raw trip table with partition and clustering for better performance
-    create_trips_table(ddl_file="ddl.sql")
+    create_trips_table(ddl_file="sql/trips_ddl.sql")
 
     # make the ETL of table trips from CSV to Big Query
     df = data_ingestion(FILE_PATH)
