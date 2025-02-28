@@ -21,7 +21,7 @@ TABLE_NAME = "raw_trips"
 TABLE_ID = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_NAME}"
 SERVICE_ACCOUNT_FILE = r"data-project-452300-e2c341ffd483.json"
 FILE_PATH = "trips.csv"
-CHUNK_SIZE = 30  # load data in chuncks
+CHUNK_SIZE = 100000  # load data in chuncks
 
 # set GCP credentials
 credentials = service_account.Credentials.from_service_account_file(
