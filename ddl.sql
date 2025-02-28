@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS `data-project-452300.challenge.raw_trips` (
+CREATE OR REPLACE TABLE `data-project-452300.challenge.raw_trips` (
     region STRING,
     origin_coord GEOGRAPHY, 
     destination_coord GEOGRAPHY, 

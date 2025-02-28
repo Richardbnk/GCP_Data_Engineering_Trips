@@ -1,0 +1,10 @@
+version: "3.8"
+
+services:
+  bigquery_processor:
+    build: .
+    container_name: bigquery_processor
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/${SERVICE_ACCOUNT_FILE}
+    volumes:
+      - .:/app

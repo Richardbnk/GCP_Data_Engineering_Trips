@@ -1,23 +1,31 @@
-import os
-import pandas as pd
-from google.cloud import bigquery
 import re
-import warnings
+import time
+import pandas as pd
+from tqdm import tqdm
+from dotenv import load_dotenv
+from google.cloud import bigquery
+from google.oauth2 import service_account
 
-warnings.simplefilter(action="ignore", category=pd.errors.SettingWithCopyWarning)
-
-
-# constants
+# variables
 PROJECT_ID = "data-project-452300"
 DATASET_ID = "challenge"
-TABLE_ID = "raw_trips"
-
+TABLE_NAME = "raw_trips"
+TABLE_ID = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_NAME}"
 SERVICE_ACCOUNT_FILE = r"data-project-452300-e2c341ffd483.json"
-
-# set Google Cloud Credentials
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_FILE
-
 FILE_PATH = "trips.csv"
+CHUNK_SIZE = 30  # load data in chuncks
+
+# set GCP credentials
+credentials = service_account.Credentials.from_service_account_file(
+    SERVICE_ACCOUNT_FILE
+)
+bq_client = bigquery.Client(credentials=credentials, project=PROJECT_ID)
+
+
+def query_bigquery_table(query):
+    """Runs a SQL query on BigQuery and returns results as a DataFrame."""
+    query_job = bq_client.query(query)  # Run the query
+    return query_job.to_dataframe()  # Convert result to Pandas DataFrame
 
 
 def create_trips_table(ddl_file):
@@ -31,32 +39,70 @@ def create_trips_table(ddl_file):
     query_job.result()  # Wait for completion
 
 
-def data_ingestion(file_path):
-
-    print("Data ingestion started.")
-    df = pd.read_csv(file_path)
-
-    df["datetime"] = pd.to_datetime(df["datetime"])
-
-    print(f"Table loaded with {len(df)} rows.\n")
-
-    return df
-
-
 def load_table_to_bigquery(df, table_id):
+    """Uploads DataFrame to BigQuery in chunks for scalability."""
+    start_time = time.time()
 
-    print(f"Importing raw table to Big Query at: {table_id}")
+    try:
+        job_config = bigquery.LoadJobConfig(
+            write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+            autodetect=True,
+        )
 
-    bq_client = bigquery.Client()
+        job = bq_client.load_table_from_dataframe(df, table_id, job_config=job_config)
+        job.result()
 
-    job_config = bigquery.LoadJobConfig(
-        write_disposition=bigquery.WriteDisposition.WRITE_APPEND, autodetect=True
-    )
+        duration = time.time() - start_time
+        return duration
 
-    job = bq_client.load_table_from_dataframe(df, table_id, job_config=job_config)
-    job.result()
+    except Exception as e:
+        print(f"Failed to upload table chunk: {e}")
+        return 0
 
-    print(f"Table finished loading.\n")
+
+def data_ingestion(file_path):
+    """Loads large CSV in chunks and processes efficiently."""
+    print("Starting data ingestion...")
+
+    total_rows = (
+        sum(1 for _ in open(file_path)) - 1
+    )  # estimate total rows (minus header)
+    total_chunks = (total_rows // CHUNK_SIZE) + 1  # etimate number of chunks
+
+    with tqdm(
+        total=total_chunks,
+        desc="- Processing Chunks",
+        unit="chunk",
+        bar_format="{l_bar}{bar} [{elapsed}<{remaining}]",
+    ) as pbar:
+        for chunk in pd.read_csv(file_path, chunksize=CHUNK_SIZE):
+            chunk["datetime"] = pd.to_datetime(chunk["datetime"])  # convert datetime
+            chunk["origin_coord"] = chunk["origin_coord"].apply(
+                clean_coordinates
+            )  # fix coordinates
+            chunk["destination_coord"] = chunk["destination_coord"].apply(
+                clean_coordinates
+            )  # fix coordinates
+
+            processing_time = load_table_to_bigquery(
+                chunk, TABLE_ID
+            )  # load to BigQuery
+            pbar.update(1)  # update progress bar
+            pbar.set_postfix(
+                {"Last Batch Time": f"{processing_time:.2f}s"}
+            )  # show last batch time
+
+    print("Data ingestion completed successfully.")
+
+
+def clean_coordinates(coord):
+    """Extracts latitude & longitude from 'POINT (lat lon)' format."""
+    try:
+        coord = coord.replace("POINT (", "").replace(")", "")
+        lon, lat = map(float, coord.split())
+        return f"POINT({lon} {lat})"  # convert to BigQuery GEOGRAPHY format
+    except:
+        return None  # handle malformed data
 
 
 def get_time_of_day(hour):
@@ -72,10 +118,9 @@ def get_time_of_day(hour):
 def round_coordinate(coordinate):
 
     # clean coordinate string and get latitude and longitude
-    coord = re.sub(r"[^0-9.\s]", "", coordinate)
-    coord = coord.split(" ")
-    latitude = float(coord[1])
-    longitude = float(coord[2])
+    coord = re.sub(r"[^0-9.\s]", "", coordinate).split(" ")
+    latitude = float(coord[0])
+    longitude = float(coord[1])
 
     # round latitude and longitude by 1 decimal positions (1 decimal == 11 km)
     return round(latitude, 1), round(longitude, 1)
@@ -122,7 +167,7 @@ def group_similar_trips(df):
 
     print("##################################################################")
     print(
-        "\nTrips with similar origin, destination, and time of day are now grouped. These are the trips:\n"
+        "\nTrips with similar origin, destination, and time of day are now grouped. These are grouped the trips:\n"
     )
     print(multiple_trips, "\n")
 
@@ -135,11 +180,11 @@ def weekly_avg_trips(df, bounding_box=None, region=None, location_filter="origin
             'Invalid "location_filter" parameter. Choose "origin", "destination", or "both".'
         )
 
-    # Ensure datetime is in proper format
+    # ensure datetime is in proper format
     df = df.copy(deep=True)
     df["datetime"] = pd.to_datetime(df["datetime"])
 
-    # Apply bounding box filter
+    # apply bounding box filter
     if bounding_box:
         min_lat, max_lat, min_lon, max_lon = bounding_box
 
@@ -181,7 +226,9 @@ def weekly_avg_trips(df, bounding_box=None, region=None, location_filter="origin
         return 0.0
 
     # extract week
-    df["week_year"] = df["datetime"].dt.to_period("W").astype(str)  # week grouping
+    df["datetime"] = df["datetime"].dt.tz_localize(None)  # remove timezone
+    df["week_year"] = df["datetime"].dt.to_period("W").astype(str)  # convert to period
+    # week grouping
 
     # print("\ndebug: trips per week (raw count)")
     weekly_trips = df.groupby("week_year").size()
@@ -190,7 +237,6 @@ def weekly_avg_trips(df, bounding_box=None, region=None, location_filter="origin
     # calculate weekly average
     weekly_avg = weekly_trips.mean()
 
-    print(f"Weekly Average Trips ({location_filter}): {weekly_avg:.2f}\n")
     return weekly_avg
 
 
@@ -205,30 +251,37 @@ def print_weekle_average_trips_cenarios():
     print("Considering 'Origin' locations only.\n")
 
     # compute weekly average for bounding box based on origin
-    weekly_avg_trips(df, bounding_box=bounding_box, location_filter="origin")
+    weekly_avg = weekly_avg_trips(
+        df, bounding_box=bounding_box, location_filter="origin"
+    )
+    print(f"Weekly Average Trips (origin): {weekly_avg:.2f}\n")
 
     print("#################################################################")
-    # define bounding box (example)
-    bounding_box = (7.49, 13.00, 44.0, 48.0)
-    print(f"\nFor Prague region only\n")
 
     # compute weekly average for bounding box based on BOTH (either origin or destination)
-    weekly_avg_trips(df, location_filter="both", region="Prague")
+    weekly_avg = weekly_avg_trips(df, location_filter="both", region="Prague")
+    print(f"\nFor Prague region - Weekly Average Trips (both): {weekly_avg:.2f}")
+
+    # compute weekly average for bounding box based on BOTH (either origin or destination)
+    weekly_avg = weekly_avg_trips(df, location_filter="both", region="Turin")
+    print(f"\nFor Turin region - Weekly Average Trips (both): {weekly_avg:.2f}")
+
+    # compute weekly average for bounding box based on BOTH (either origin or destination)
+    weekly_avg = weekly_avg_trips(df, location_filter="both", region="Hamburg")
+    print(f"\nFor Hamburg region - Weekly Average Trips (both): {weekly_avg:.2f}")
 
 
-# MAIN CODE
-# if __name__ == "__main__":
+if __name__ == "__main__":
 
-# create raw trip table
-create_trips_table(ddl_file="ddl.sql")
+    # query to get all records from trips table
+    query = f"SELECT * FROM `{TABLE_ID}`"
 
-df = data_ingestion(FILE_PATH)
+    # run query and store results in a DataFrame
+    df = query_bigquery_table(query)
 
-table_id = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}"
+    table_id = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_NAME}"
 
-load_table_to_bigquery(df, table_id)
+    # calculate and print similar group trips
+    df_similar_trips = group_similar_trips(df)
 
-# calculate and print similar group trips
-df_similar_trips = group_similar_trips(df)
-
-print_weekle_average_trips_cenarios()
+    print_weekle_average_trips_cenarios()
