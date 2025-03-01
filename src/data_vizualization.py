@@ -58,6 +58,7 @@ if __name__ == "__main__":
     df["month"] = df["datetime"].dt.month_name()
 
     # generate reports
+
     print_report("TOTAL TRIPS PER REGION", df["region"].value_counts())
     print_report("TOTAL TRIPS PER DATASOURCE", df["datasource"].value_counts())
     print_report(
