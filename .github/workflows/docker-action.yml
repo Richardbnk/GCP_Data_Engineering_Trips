@@ -1,7 +1,7 @@
 name: Build and Run Docker App
 
-on: push  # Runs on every push
-
+on:
+  workflow_dispatch:
 jobs:
   run-docker:
     runs-on: ubuntu-latest
