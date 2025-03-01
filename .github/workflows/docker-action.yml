@@ -1,6 +1,6 @@
-name: Build and Run Docker
+name: Build and Run Docker App
 
-on: push
+on: push  # Runs on every push
 
 jobs:
   run-docker:
@@ -15,5 +15,5 @@ jobs:
       - name: Build Docker Image
         run: docker build -t my-app .
 
-      - name: Run Docker Container with Service Account
+      - name: Run Docker Container and Execute Application
         run: docker run -v $PWD/data-project-452300-e2c341ffd483.json:/app/data-project-452300-e2c341ffd483.json my-app
