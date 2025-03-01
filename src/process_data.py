@@ -34,8 +34,8 @@ bq_client = bigquery.Client(credentials=credentials, project=PROJECT_ID)
 warnings.simplefilter(action="ignore", category=pd.errors.SettingWithCopyWarning)
 
 
-def create_trips_table(ddl_file):
-    """Create or replace the trip table on big query."""
+def create_bq_table(ddl_file):
+    """Run DDL for table creation."""
 
     with open(ddl_file, "r") as ddl_file:
         ddl_query = ddl_file.read()
@@ -44,7 +44,7 @@ def create_trips_table(ddl_file):
 
 
 def load_table_to_bigquery(df, table_id):
-    """Upload DataFrame to BigQuery in chunks for scalability."""
+    """Append data from DataFrame to BigQuery in chunks for scalability."""
 
     start_time = time.time()
 
@@ -68,7 +68,7 @@ def load_table_to_bigquery(df, table_id):
 def data_ingestion(file_path):
     """Loads chunks and processes information efficiently."""
 
-    print("🔹 Starting data ingestion...")
+    print("\n\n🔹 Starting data ingestion for trips.csv")
 
     total_rows = (
         sum(1 for _ in open(file_path)) - 1
@@ -102,6 +102,7 @@ def data_ingestion(file_path):
 
             pbar.set_postfix({"Last Batch Time": f"{processing_time:.2f}s"})
 
+    time.sleep(1)
     print("🔹 Data ingestion completed successfully.")
 
 
@@ -119,7 +120,7 @@ def clean_coordinates(coord):
 if __name__ == "__main__":
 
     # create raw trip table with partition and clustering for better performance
-    create_trips_table(ddl_file="sql/trips_ddl.sql")
+    create_bq_table(ddl_file="sql/ddl/trips_ddl.sql")
 
     # make the ETL of table trips from CSV to Big Query
     df = data_ingestion(FILE_PATH)
