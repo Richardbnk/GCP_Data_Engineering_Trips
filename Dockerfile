@@ -14,10 +14,6 @@ WORKDIR /app
 COPY src/ /app/src/
 COPY sql/ /app/sql/
 COPY requirements.txt /app/
-#COPY .env /app/
-
-# Copy the service account file into the container
-COPY data-project-452300-e2c341ffd483.json /app/data-project-452300-e2c341ffd483.json
 
 # DDL SQL Files
 COPY sql/ddl/trips_ddl.sql /app/sql/ddl/trips_ddl.sql
