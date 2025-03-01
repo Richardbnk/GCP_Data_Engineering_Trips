@@ -1,16 +1,16 @@
-name: Run Docker in GitHub Actions
+name: Build and Run Docker
 
-on: push  # Runs on every push to the repository
+on: push
 
 jobs:
   run-docker:
-    runs-on: ubuntu-latest  # Use the latest Ubuntu runner
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3  # Get your repository's code
+        uses: actions/checkout@v3
+
+      - name: Create service account file
+        run: echo "${{ secrets.GCP_SERVICE_ACCOUNT }}" > data-project-452300-e2c341ffd483.json
 
       - name: Build Docker Image
         run: docker build -t my-app .
-
-      - name: Run Docker Container
-        run: docker run my-app
