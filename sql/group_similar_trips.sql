@@ -10,7 +10,7 @@ WITH trips_with_time_of_day AS (
         ROUND(ST_X(origin_coord), 1) AS origin_longitude,
         ROUND(ST_Y(destination_coord), 1) AS destination_latitude,
         ROUND(ST_X(destination_coord), 1) AS destination_longitude,
-        datasource
+        datasource,
     FROM `data-project-452300.challenge.raw_trips`
 )
 
@@ -25,5 +25,5 @@ SELECT
     STRING_AGG(DISTINCT datasource, ', ') AS datasources
 FROM trips_with_time_of_day
 GROUP BY 1,2,3,4,5,6
-HAVING trip_count > 1
+-- HAVING trip_count > 1 # Filter only more than one trip at similar variables
 ORDER BY trip_count DESC;

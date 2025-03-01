@@ -19,8 +19,11 @@ COPY requirements.txt /app/
 # Copy the service account file into the container
 COPY data-project-452300-e2c341ffd483.json /app/data-project-452300-e2c341ffd483.json
 
+# DDL SQL Files
+COPY sql/ddl/trips_ddl.sql /app/sql/ddl/trips_ddl.sql
+COPY sql/ddl/grouped_trips.sql /app/sql/ddl/grouped_trips.sql
 
-COPY sql/trips_ddl.sql /app/sql/trips_ddl.sql
+# trip csv file
 COPY trips.csv /app/trips.csv
 
 # Set environment variable inside the container
