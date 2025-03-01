@@ -2,6 +2,13 @@ name: Build and Run Docker App
 
 on:
   workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+  pull-requests: write
+  
 jobs:
   run-docker:
     runs-on: ubuntu-latest
