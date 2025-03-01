@@ -66,6 +66,6 @@ if __name__ == "__main__":
     print_report("TOTAL TRIPS PER DAY OF THE WEEK", df["day_of_week"].value_counts())
     print_report("TOTAL TRIPS PER MONTH", df["month"].value_counts())
 
-    print("\n##################################################################")
+    print("\n\n##################################################################")
     print("✅ REPORT GENERATION COMPLETE ✅")
     print("##################################################################\n\n")
